@@ -1,43 +1,80 @@
-name: Artifactory build upon a push
+name: Maven Package upon a push
 
 on:
-  release:
-    types: [published]
-  pull_request:
-    types: [opened, reopened, synchronize]
   push:
     branches:
-      - master
       - develop
-      - 1.*
-      - MOSIP*
+      - 1.1.5
+      - 1.2.*
       - release*
       - main
-  
+
 jobs:
-  build-docker-artifactory-server:
-    strategy:
-      matrix:
-        include:
-          - SERVICE_LOCATION: 'artifacts'
-            SERVICE_NAME: 'artifacts'
-            SERVICE_HELM_LOCATION: 'charts/artifatory'
-            repo_owner: 'bn46'
-            repo_name: 'mosip-helm'
-            repo_branch: 'develop'
-      fail-fast: false
-    name: ${{ matrix.SERVICE_NAME }}
-    uses: bn46/kattu/.github/workflows/docker-build.yml@master
-    with:
-      SERVICE_LOCATION: ${{ matrix.SERVICE_LOCATION }}
-      SERVICE_NAME: ${{ matrix.SERVICE_NAME }}
-      SERVICE_HELM_LOCATION: ${{ matrix.SERVICE_HELM_LOCATION }}
-      OTHER_REPO_OWNER: ${{ matrix.repo_owner }}
-      OTHER_REPO_NAME: ${{ matrix.repo_name }}
-      OTHER_REPO_BRANCH: ${{ matrix.repo_branch }}
-    secrets:
-      DEV_NAMESPACE_DOCKER_HUB: ${{ secrets.DEV_NAMESPACE_DOCKER_HUB }}
-      ACTOR_DOCKER_HUB: ${{ secrets.ACTOR_DOCKER_HUB }}
-      RELEASE_DOCKER_HUB: ${{ secrets.RELEASE_DOCKER_HUB }}
-      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
-      GH_PAT: ${{ secrets.GH_PAT }}
+  build-artifactory-server:
+    runs-on: ubuntu-latest
+    env:
+      NAMESPACE: ${{ secrets.dev_namespace_docker_hub }}
+      SERVICE_NAME: artifactory-server
+      SERVICE_LOCATION: artifacts/
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v1
+
+      - name: Setup branch and env
+        run: |
+          echo "BRANCH_NAME=$(echo ${{ github.ref }} | sed -e 's,.*/\(.*\),\1,')" >> $GITHUB_ENV
+          echo "GPG_TTY=$(tty)" >> $GITHUB_ENV
+
+      - name: setup environment
+        run: |
+          echo "GPG_TTY=$(tty)" >> $GITHUB_ENV
+          echo "BRANCH_NAME=$(echo ${{ github.ref }} | sed -e 's,.*/\(.*\),\1,')" >> $GITHUB_ENV
+
+      - name: Build image
+        run: |
+          cd "./${{env.SERVICE_LOCATION}}"
+          docker build . --file Dockerfile --tag ${{ env.SERVICE_NAME }}
+
+      - name: Get Image Digest
+        run: |
+          IMAGE_ID=$NAMESPACE/$SERVICE_NAME
+          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+          VERSION=$BRANCH_NAME
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $IMAGE_ID:$VERSION)
+          echo "DIGEST=$DIGEST" >> $GITHUB_ENV
+
+      - name: Log into registry
+        run: echo "${{ secrets.release_docker_hub }}" | docker login -u ${{ secrets.actor_docker_hub }} --password-stdin
+
+      - name: Push image
+        run: |
+          IMAGE_ID=$NAMESPACE/$SERVICE_NAME
+          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+          VERSION=$BRANCH_NAME
+          echo "push version $VERSION"
+          echo IMAGE_ID=$IMAGE_ID
+          echo VERSION=$VERSION
+          docker tag $SERVICE_NAME $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+
+      - name: Update values.yaml in Other Repo
+        run: |
+          REPO_OWNER=bn46
+          REPO_NAME=mosip-helm
+          FILE_PATH=charts/artifactory
+          BRANCH=develop  # Replace with the branch name where values.yaml is located
+
+          curl -X PUT \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -d '{"sha":"SHA_OF_VALUES_YAML","message":"Update SHA256ID","content":"'"$(base64 <<< "sha256id: $DIGEST")"'"}' \
+            "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/contents/$FILE_PATH?ref=$BRANCH"
+
+      - uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          fields: repo,message,commit,author,action,eventName,ref,workflow,job,took
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+        if: failure()

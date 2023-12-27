@@ -69,7 +69,7 @@ jobs:
           echo "checkout develop branch"
           git checkout develop
           echo "updating image tag in values file"
-          sed -i "s,sha256id:.*,sha256id: $DIGEST" charts/artifactory/values.yaml
+          sed -i "s#sha256id:.*#sha256id: $DIGEST#" charts/artifactory/values.yaml
           git add . && git commit -m "update image tag"
           git push
 

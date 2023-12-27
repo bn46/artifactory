@@ -39,7 +39,7 @@ jobs:
           context: .
           file: artifacts/Dockerfile
           push: true
-          tags: bn46/artifacts:${{ github.ref }}@${{ github.sha }}
+          tags: bn46/artifacts:main-${{ github.sha }}
   promote-to-dev-environment:
     runs-on: ubuntu-latest
     needs: docker-build-push

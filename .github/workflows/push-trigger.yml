@@ -16,6 +16,7 @@ jobs:
       NAMESPACE: ${{ secrets.dev_namespace_docker_hub }}
       SERVICE_NAME: artifacts
       SERVICE_LOCATION: artifacts/
+      CONFIG_REPO_NAME: mosip-helm
 
     steps:
       - uses: actions/checkout@v2
@@ -57,18 +58,20 @@ jobs:
           DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $IMAGE_ID:$VERSION)
           echo "DIGEST=$DIGEST" >> $GITHUB_ENV
 
-      - name: Update values.yaml in Other Repo
+      - name: Promote to Dev Environment
+        if: success()  # Only run if the previous steps were successful
         run: |
-          REPO_OWNER=bn46
-          REPO_NAME=mosip-helm
-          FILE_PATH=charts/artifactory
-          BRANCH=develop  # Replace with the branch name where values.yaml is located
-
-          curl -X PUT \
-            -H "Authorization: token ${{ secrets.GH_PAT }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            -d '{"sha":"SHA_OF_VALUES_YAML","message":"Update SHA256ID","content":"'"$(base64 <<< "sha256id: $DIGEST")"'"}' \
-            "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/contents/$FILE_PATH?ref=$BRANCH"
+          echo "promoting into dev environment!"
+          git config --global user.email ci-bot@argocd.com && git config --global user.name ci-bot
+          echo "cloning config repo $CONFIG_REPO_NAME"
+          git clone https://oauth2:${{ secrets.GH_PAT }}@github.com/${{ github.repository_owner }}/$CONFIG_REPO_NAME.git
+          cd $CONFIG_REPO_NAME
+          echo "checkout develop branch"
+          git checkout develop
+          echo "updating image tag in values file"
+          sed -i "s,sha256id:.*,sha256id:\ ${{ github.sha }}," charts/artifactory/values.yaml
+          git add . && git commit -m "update image tag"
+          git push
 
       - uses: 8398a7/action-slack@v3
         with:

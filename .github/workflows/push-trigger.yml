@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NAMESPACE: ${{ secrets.dev_namespace_docker_hub }}
-      SERVICE_NAME: artifactory-server
+      SERVICE_NAME: artifacts
       SERVICE_LOCATION: artifacts/
 
     steps:
@@ -66,7 +66,7 @@ jobs:
           BRANCH=develop  # Replace with the branch name where values.yaml is located
 
           curl -X PUT \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Authorization: token ${{ secrets.GH_PAT }}" \
             -H "Accept: application/vnd.github.v3+json" \
             -d '{"sha":"SHA_OF_VALUES_YAML","message":"Update SHA256ID","content":"'"$(base64 <<< "sha256id: $DIGEST")"'"}' \
             "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/contents/$FILE_PATH?ref=$BRANCH"

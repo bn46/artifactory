@@ -36,14 +36,6 @@ jobs:
           cd "./${{env.SERVICE_LOCATION}}"
           docker build . --file Dockerfile --tag ${{ env.SERVICE_NAME }}
 
-      - name: Get Image Digest
-        run: |
-          IMAGE_ID=$NAMESPACE/$SERVICE_NAME
-          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
-          VERSION=$BRANCH_NAME
-          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $IMAGE_ID:$VERSION)
-          echo "DIGEST=$DIGEST" >> $GITHUB_ENV
-
       - name: Log into registry
         run: echo "${{ secrets.release_docker_hub }}" | docker login -u ${{ secrets.actor_docker_hub }} --password-stdin
 
@@ -57,6 +49,13 @@ jobs:
           echo VERSION=$VERSION
           docker tag $SERVICE_NAME $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
+      - name: Get Image Digest
+        run: |
+          IMAGE_ID=$NAMESPACE/$SERVICE_NAME
+          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+          VERSION=$BRANCH_NAME
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $IMAGE_ID:$VERSION)
+          echo "DIGEST=$DIGEST" >> $GITHUB_ENV
 
       - name: Update values.yaml in Other Repo
         run: |

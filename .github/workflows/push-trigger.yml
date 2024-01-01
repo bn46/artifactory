@@ -69,7 +69,8 @@ jobs:
           echo "checkout develop branch"
           git checkout develop
           echo "updating image tag in values file"
-          sed -i "s,tag:.*,tag:\ ${{ github.sha }}," charts/artifactory/values.yaml
+          IMAGE_TAG=${{ github.sha }}
+          sed -i "s/\(^\s*tag:\s*\).*/\1$IMAGE_TAG/" charts/artifactory/values.yaml
           git add . && git commit -m "update image tag"
           git push
 

@@ -50,6 +50,11 @@ jobs:
           echo VERSION=$VERSION
           docker tag $SERVICE_NAME $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
+      - name: Install yq
+        run: |
+          wget https://github.com/mikefarah/yq/releases/download/3.4.0/yq_linux_amd64 -O yq
+          chmod +x yq
+          sudo mv yq /usr/local/bin
       - name: Get Image Digest
         run: |
           IMAGE_ID=$NAMESPACE/$SERVICE_NAME
@@ -70,7 +75,7 @@ jobs:
           git checkout develop
           echo "updating image tag in values file"
           IMAGE_TAG=${{ github.sha }}
-          sed -i "s/\(^\s*tag:\s*\).*/\1$IMAGE_TAG/" charts/artifactory/values.yaml
+          yq eval -i ".image.tag = \"$IMAGE_TAG\"" charts/artifactory/values.yaml
           git add . && git commit -m "update image tag"
           git push
 

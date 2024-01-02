@@ -1,88 +1,34 @@
-name: Maven Package upon a push
+name: Artifactory build upon a push
 
 on:
+  release:
+    types: [published]
+  pull_request:
+    types: [opened, reopened, synchronize]
   push:
     branches:
+      - master
       - develop
-      - 1.1.5
-      - 1.2.*
+      - 1.*
+      - MOSIP*
       - release*
       - main
-
+  
 jobs:
-  build-artifactory-server:
-    runs-on: ubuntu-latest
-    env:
-      NAMESPACE: ${{ secrets.dev_namespace_docker_hub }}
-      SERVICE_NAME: artifacts
-      SERVICE_LOCATION: artifacts/
-      CONFIG_REPO_NAME: mosip-helm
-
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v1
-
-      - name: Setup branch and env
-        run: |
-          echo "BRANCH_NAME=$(echo ${{ github.ref }} | sed -e 's,.*/\(.*\),\1,')" >> $GITHUB_ENV
-          echo "GPG_TTY=$(tty)" >> $GITHUB_ENV
-
-      - name: setup environment
-        run: |
-          echo "GPG_TTY=$(tty)" >> $GITHUB_ENV
-          echo "BRANCH_NAME=$(echo ${{ github.ref }} | sed -e 's,.*/\(.*\),\1,')" >> $GITHUB_ENV
-
-      - name: Build image
-        run: |
-          cd "./${{env.SERVICE_LOCATION}}"
-          docker build . --file Dockerfile --tag ${{ env.SERVICE_NAME }}
-
-      - name: Log into registry
-        run: echo "${{ secrets.release_docker_hub }}" | docker login -u ${{ secrets.actor_docker_hub }} --password-stdin
-
-      - name: Push image
-        run: |
-          IMAGE_ID=$NAMESPACE/$SERVICE_NAME
-          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
-          VERSION=$BRANCH_NAME
-          echo "push version $VERSION"
-          echo IMAGE_ID=$IMAGE_ID
-          echo VERSION=$VERSION
-          docker tag $SERVICE_NAME $IMAGE_ID:$VERSION
-          docker push $IMAGE_ID:$VERSION
-      - name: Install yq
-        run: |
-          wget https://github.com/mikefarah/yq/releases/download/3.4.0/yq_linux_amd64 -O yq
-          chmod +x yq
-          sudo mv yq /usr/local/bin
-      - name: Get Image Digest
-        run: |
-          IMAGE_ID=$NAMESPACE/$SERVICE_NAME
-          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
-          VERSION=$BRANCH_NAME
-          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $IMAGE_ID:$VERSION)
-          echo "DIGEST=$DIGEST" >> $GITHUB_ENV
-
-      - name: Promote to Dev Environment
-        if: success()  # Only run if the previous steps were successful
-        run: |
-          echo "promoting into dev environment!"
-          git config --global user.email ci-bot@argocd.com && git config --global user.name ci-bot
-          echo "cloning config repo $CONFIG_REPO_NAME"
-          git clone https://oauth2:${{ secrets.GH_PAT }}@github.com/${{ github.repository_owner }}/$CONFIG_REPO_NAME.git
-          cd $CONFIG_REPO_NAME
-          echo "checkout develop branch"
-          git checkout develop
-          echo "updating image tag in values file"
-          IMAGE_TAG=${{ github.sha }}
-          yq eval -i ".image.tag = \"$IMAGE_TAG\"" charts/artifactory/values.yaml
-          git add . && git commit -m "update image tag"
-          git push
-
-      - uses: 8398a7/action-slack@v3
-        with:
-          status: ${{ job.status }}
-          fields: repo,message,commit,author,action,eventName,ref,workflow,job,took
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
-        if: failure()
+  build-docker-artifactory-server:
+    strategy:
+      matrix:
+        include:
+          - SERVICE_LOCATION: 'artifacts'
+            SERVICE_NAME: 'artifactory-server'
+      fail-fast: false
+    name: ${{ matrix.SERVICE_NAME }}
+    uses: mosip/kattu/.github/workflows/docker-build.yml@master
+    with:
+      SERVICE_LOCATION: ${{ matrix.SERVICE_LOCATION }}
+      SERVICE_NAME: ${{ matrix.SERVICE_NAME }}
+    secrets:
+      DEV_NAMESPACE_DOCKER_HUB: ${{ secrets.DEV_NAMESPACE_DOCKER_HUB }}
+      ACTOR_DOCKER_HUB: ${{ secrets.ACTOR_DOCKER_HUB }}
+      RELEASE_DOCKER_HUB: ${{ secrets.RELEASE_DOCKER_HUB }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}

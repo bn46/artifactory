@@ -1,2 +1,2 @@
 # artifactory
-ji
+

@@ -1,4 +1,4 @@
-zzzzzzz# artifactory
+# artifactory
 
 hi bnnn
 hh

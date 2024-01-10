@@ -1,4 +1,4 @@
 # artifactory
 
-hi bnnn
+
 hi

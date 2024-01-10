@@ -1,4 +1,4 @@
 # artifactory
 
 
-hnnni
+hnn

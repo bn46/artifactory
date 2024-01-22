@@ -173,7 +173,7 @@ RUN sed -i -e '/listen/!b' -e '/80;/!b' -e 's/80;/8080;/' /etc/nginx/conf.d/defa
 # select container user for all tasks
 USER ${container_user_uid}:${container_user_gid}
 
-EXPOSE 8080
+#EXPOSE 8080
 
 CMD ["nginx", "-g", "daemon off;"]
 

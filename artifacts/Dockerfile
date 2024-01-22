@@ -175,5 +175,5 @@ USER ${container_user_uid}:${container_user_gid}
 
 EXPOSE 8080
 
-CMD ["nginx", "-g", "daemon off;", "exit"]
+CMD ["nginx", "-g", "daemon off;"]
 
